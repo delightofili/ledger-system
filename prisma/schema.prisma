@@ -1,0 +1,92 @@
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  code        String      @unique
+
+  type        AccountType
+  currency    String      @default("USD")
+  description String?
+  isSystem    Boolean     @default(false)
+
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+
+  entries     Entry[]
+
+  @@map("accounts")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model Transaction {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idempotencyKey  String            @unique
+  description     String
+  status          TransactionStatus @default(POSTED)
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+
+  entries         Entry[]
+
+  @@map("transactions")
+}
+
+enum TransactionStatus {
+  PENDING
+  POSTED
+  VOIDED
+}
+
+
+model Entry {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transactionId String    @db.Uuid
+  accountId     String    @db.Uuid
+  direction     Direction
+  amount        BigInt
+  currency      String
+  createdAt     DateTime  @default(now())
+
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  account       Account     @relation(fields: [accountId], references: [id])
+
+  @@map("entries")
+}
+
+enum Direction {
+  DEBIT
+  CREDIT
+}
+
+model IdempotencyKey {
+  key         String   @id
+  requestHash String
+  response    Json?
+  status      KeyStatus @default(PROCESSING)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime @default(dbgenerated("NOW() + INTERVAL '24 hours'"))
+
+  @@map("idempotency_keys")
+}
+
+enum KeyStatus {
+  PROCESSING
+  COMPLETE
+  FAILED
+}

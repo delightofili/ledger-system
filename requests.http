@@ -1,0 +1,33 @@
+### Create a new account
+
+POST http://localhost:3001/accounts
+Content-Type: application/json
+
+{
+    "name": "Nonso Wallet",
+    "code": "2001-USR-NONSOO",
+    "type": "LIABILITY",
+    "currency": "USD"
+}
+###
+POST http://localhost:3001/transactions
+Content-Type: application/json
+Idempotency-Key: deposit-nonso-001
+
+{
+  "description": "User deposit via Paystack",
+  "entries": [
+    {
+      "accountId": "0a5d0268-4a4d-4ce9-8d5f-44b264231ab4",
+      "direction": "DEBIT",
+      "amount": "100.00",
+      "currency": "USD"
+    },
+    {
+      "accountId": "69fc33ba-3bf5-4731-ae01-12441dc1cba6",
+      "direction": "CREDIT",
+      "amount": "100.00",
+      "currency": "USD"
+    }
+  ]
+}
