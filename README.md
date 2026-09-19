@@ -1,4 +1,4 @@
-# Delightsome's Double-Entry Accounting Ledger System
+# Delightsomee's Double-Entry Accounting Ledger System
 
 A robust, high-integrity financial ledger engine built with **Node.js, Express, TypeScript, and Prisma ORM**. This system implements pure double-entry bookkeeping principles to maintain absolute financial data consistency, prevent transaction race conditions, and provide an immutable audit trail for account balances.
 
@@ -20,7 +20,6 @@ A robust, high-integrity financial ledger engine built with **Node.js, Express, 
 src/
 ├── controllers/    # Request handlers & HTTP routing logic
 ├── services/       # Core ledger domain logic & transaction rules
-├── middleware/     # Validation, error handling, and authentication
 ├── routes/         # Express endpoint definitions
 ├── types/          # Shared TypeScript interfaces & types
 └── prisma/         # Schema definitions, migrations, and seed scripts
@@ -99,13 +98,13 @@ src/
 
 ## API Endpoints Overview
 
-| Method | Endpoint               | Description                                   |
-| ------ | ---------------------- | --------------------------------------------- |
-| `POST` | `/api/v1/accounts`     | Create a new account (Asset, Liability, etc.) |
-| `GET`  | `/api/v1/accounts`     | Fetch chart of accounts with current balances |
-| `GET`  | `/api/v1/accounts/:id` | Get specific account details and history      |
-| `POST` | `/api/v1/transactions` | Post a balanced double-entry transaction      |
-| `GET`  | `/api/v1/transactions` | List all posted journal entries               |
+| Method | Endpoint            | Description                                   |
+| ------ | ------------------- | --------------------------------------------- |
+| `POST` | `/api/accounts`     | Create a new account (Asset, Liability, etc.) |
+| `GET`  | `/api/accounts`     | Fetch chart of accounts with current balances |
+| `GET`  | `/api/accounts/:id` | Get specific account details and history      |
+| `POST` | `/api/transactions` | Post a balanced double-entry transaction      |
+| `GET`  | `/api/transactions` | List all posted journal entries               |
 
 ## Example Transaction Payload
 
