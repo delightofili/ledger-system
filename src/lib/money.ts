@@ -3,27 +3,42 @@ import Decimal from "decimal.js";
 Decimal.set({ precision: 28, rounding: Decimal.ROUND_HALF_UP });
 
 const CURRENCY_DECIMALS: Record<string, number> = {
+  // fiat
   USD: 2,
   NGN: 2,
   GBP: 2,
-  BTC: 8,
+  EUR: 2,
   JPY: 0,
+
+  // stablecoins
+  USDC: 6,
+
+  USDT: 6,
+
+  DAI: 18,
+
+  ETH: 18,
+
+  BTC: 8,
+
+  MATIC: 18,
 };
 
-// convert display amount to storage units
-export function toSmallestUnit(
-  amount: string | number,
-  currency: string,
-): bigint {
-  const decimals = CURRENCY_DECIMALS[currency] ?? 2;
-  return BigInt(new Decimal(amount).mul(Math.pow(10, decimals)).toFixed(0));
+export function toSmallestUnit(amount: string, currency: string): bigint {
+  const decimals = CURRENCY_DECIMALS[currency];
+  if (decimals === undefined) throw new Error(`Unknown currency: ${currency}`);
+
+  return BigInt(
+    new Decimal(amount).mul(new Decimal(10).pow(decimals)).toFixed(0),
+  );
 }
 
-// convert storage units to display amount
 export function fromSmallestUnit(amount: bigint, currency: string): string {
-  const decimals = CURRENCY_DECIMALS[currency] ?? 2;
+  const decimals = CURRENCY_DECIMALS[currency];
+  if (decimals === undefined) throw new Error(`Unknown currency: ${currency}`);
+
   return new Decimal(amount.toString())
-    .div(Math.pow(10, decimals))
+    .div(new Decimal(10).pow(decimals))
     .toFixed(decimals);
 }
 

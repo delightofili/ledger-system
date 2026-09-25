@@ -45,6 +45,31 @@ const SYSTEM_ACCOUNTS = [
     type: AccountType.EXPENSE,
     description: "Fees paid to payment processors",
   },
+
+  {
+    code: "1003",
+    name: "Paystack Float",
+    type: AccountType.ASSET,
+    description: "Funds collected by Paystack not yet settled to our bank",
+  },
+  {
+    code: "1004",
+    name: "Stripe Float",
+    type: AccountType.ASSET,
+    description: "Funds collected by Stripe not yet settled to our bank",
+  },
+  {
+    code: "5001",
+    name: "Paystack Processing Fees",
+    type: AccountType.EXPENSE,
+    description: "Fees paid to Paystack per transaction",
+  },
+  {
+    code: "5002",
+    name: "Stripe Processing Fees",
+    type: AccountType.EXPENSE,
+    description: "Fees paid to Stripe per transaction",
+  },
 ];
 
 export async function seedSystemAccounts() {
@@ -57,3 +82,44 @@ export async function seedSystemAccounts() {
   }
   console.log("System accounts seeded");
 }
+
+const CRYPTO_ACCOUNTS = [
+  // ASSET accounts
+  {
+    code: "1010",
+    name: "USDC Hot Wallet",
+    type: "ASSET",
+    currency: "USDC",
+    description: "USDC held in platform hot wallet for immediate payouts",
+  },
+  {
+    code: "1011",
+    name: "USDT Hot Wallet",
+    type: "ASSET",
+    currency: "USDT",
+    description: "USDT held in platform hot wallet",
+  },
+  {
+    code: "1012",
+    name: "ETH Hot Wallet",
+    type: "ASSET",
+    currency: "ETH",
+    description: "ETH held for gas fees",
+  },
+
+  // LIABILITY accounts
+  {
+    code: "2010",
+    name: "User USDC Balances",
+    type: "LIABILITY",
+    currency: "USDC",
+    description: "Total USDC owed to all users",
+  },
+  {
+    code: "2011",
+    name: "User USDT Balances",
+    type: "LIABILITY",
+    currency: "USDT",
+    description: "Total USDT owed to all users",
+  },
+];

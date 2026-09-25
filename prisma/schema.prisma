@@ -90,3 +90,121 @@ enum KeyStatus {
   COMPLETE
   FAILED
 }
+
+model Payment {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reference       String        @unique
+  providerRef     String?       @unique
+  
+  provider        Provider
+  status          PaymentStatus @default(PENDING)
+  amount          BigInt
+  
+  currency        String
+  fees            BigInt        @default(0)
+  
+  netAmount       BigInt        @default(0)
+  
+  userId          String?
+  
+  accountId       String?       @db.Uuid
+  
+  transactionId   String?       @db.Uuid
+  
+  metadata        Json?
+  webhookPayload  Json?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("payments")
+}
+
+enum Provider {
+  PAYSTACK
+  STRIPE
+}
+
+enum PaymentStatus {
+  PENDING
+ 
+  PROCESSING
+  
+  SUCCESS
+  
+  FAILED
+  
+  REFUNDED
+  
+}
+
+model WebhookEvent {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  provider    String
+  eventType   String
+  
+  eventId     String   @unique
+  
+  payload     Json
+  
+  processed   Boolean  @default(false)
+  processedAt DateTime?
+  error       String?
+  
+  createdAt   DateTime @default(now())
+
+  @@map("webhook_events")
+}
+
+model CryptoDepositAddress {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String
+  address   String   @unique
+  // ethereum address
+  index     Int      @unique
+  // HD wallet derivation index
+  currency  String   @default("USDC")
+  network   String   @default("sepolia")
+  createdAt DateTime @default(now())
+
+  @@map("crypto_deposit_addresses")
+}
+
+model CryptoTransaction {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  txHash              String   @unique
+  // blockchain transaction hash — unique identifier
+  userId              String
+  type                String
+  // DEPOSIT or WITHDRAWAL
+  currency            String
+  amount              BigInt
+  fromAddress         String
+  toAddress           String
+  blockNumber         Int
+  ledgerTransactionId String?  @db.Uuid
+  // link back to your internal ledger transaction
+  status              String   @default("CONFIRMED")
+  createdAt           DateTime @default(now())
+
+  @@map("crypto_transactions")
+}
+
+model ReconciliationAlert {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String
+  currency        String
+  depositAddress  String
+  internalBalance BigInt
+  onChainBalance  BigInt
+  discrepancy     BigInt
+  network         String
+  status          String   @default("PENDING")
+  // PENDING, INVESTIGATING, RESOLVED
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@map("reconciliation_alerts")
+}
