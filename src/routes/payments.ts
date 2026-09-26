@@ -12,9 +12,7 @@ router.post("/:reference/refund", async (req, res) => {
   try {
     const { reference } = req.params;
     const { amount } = req.body;
-    // amount is optional — if not provided, full refund
 
-    // STEP 1 — find the payment
     const payment = await prisma.payment.findUnique({
       where: { reference },
     });
@@ -23,12 +21,9 @@ router.post("/:reference/refund", async (req, res) => {
       return res.status(404).json({ error: "Payment not found" });
     }
 
-    // STEP 2 — must be SUCCESS to refund
     if (payment.status !== "SUCCESS") {
       return res.status(400).json({
         error: `Cannot refund a payment with status: ${payment.status}`,
-        // can only refund successful payments
-        // pending/failed payments were never charged
       });
     }
 
@@ -38,22 +33,19 @@ router.post("/:reference/refund", async (req, res) => {
       });
     }
 
-    // STEP 3 — determine refund amount
     const refundAmount = amount
       ? Number(BigInt(amount))
       : Number(payment.amount);
-    // if amount provided use it, otherwise full refund
-    // Paystack expects kobo (smallest unit)
 
     const isPartialRefund = refundAmount < Number(payment.amount);
 
-    // STEP 4 — call Paystack refund API
+    //  call Paystack refund API
     let paystackRefund;
     try {
       paystackRefund = await refundPaystackTransaction({
         transaction: payment.providerRef,
         amount: isPartialRefund ? refundAmount : undefined,
-        // for full refund don't send amount — let Paystack handle it
+        // for full refund I won't send amount — let Paystack handle it
       });
     } catch (error: unknown) {
       const message =
@@ -63,46 +55,23 @@ router.post("/:reference/refund", async (req, res) => {
       });
     }
 
-    // STEP 5 — calculate fee recovery
+    //  calculate fee recovery
     // Paystack may or may not refund the processing fee
-    // depends on your Paystack plan
+
     const feeRefunded = paystackRefund.fees_split?.paystack
       ? BigInt(paystackRefund.fees_split.paystack)
       : 0n;
-    // if fees_split is null or paystack portion is 0
-    // means Paystack kept the fee — common on basic plans
 
     const refundAmountBigInt = BigInt(refundAmount);
     const grossAmount = refundAmountBigInt;
     // what leaves user's wallet
     const netAmount = refundAmountBigInt - BigInt(payment.fees || 0n);
-    // what goes back to Paystack float
-    // net = gross minus fees (fees stay with Paystack unless refunded)
-
-    // STEP 6 — post reversal to ledger
-    // The refund double-entry is the EXACT reverse of the deposit:
-    //
-    // Original deposit was:
-    //   DEBIT  paystack_float       net_amount   (you received money)
-    //   DEBIT  processing_expense   fees         (you paid fees)
-    //   CREDIT user_wallet          gross_amount (user got credited)
-    //
-    // Refund reversal:
-    //   DEBIT  user_wallet          gross_amount (remove from user)
-    //   CREDIT paystack_float       net_amount   (money goes back to Paystack)
-    //   CREDIT processing_expense   fees         (fees recovered IF refunded)
-    //
-    // If fees NOT refunded:
-    //   DEBIT  user_wallet          gross_amount (remove from user)
-    //   CREDIT paystack_float       gross_amount (full amount back to Paystack)
-    //   — no processing_expense entry because fee wasn't recovered
 
     const idempotencyKey = `refund-${reference}-${crypto.randomBytes(8).toString("hex")}`;
 
     let ledgerTransaction;
 
     if (feeRefunded > 0n) {
-      // Paystack refunded the fee — three entries
       ledgerTransaction = await postTransaction({
         idempotencyKey,
         description: `Refund for payment ${reference}`,
@@ -112,14 +81,12 @@ router.post("/:reference/refund", async (req, res) => {
             direction: "DEBIT",
             amount: grossAmount,
             currency: payment.currency,
-            // remove gross amount from user's wallet
           },
           {
             accountId: SYSTEM_ACCOUNTS.PAYSTACK_FLOAT,
             direction: "CREDIT",
             amount: netAmount,
             currency: payment.currency,
-            // net amount goes back to Paystack
           },
           {
             accountId: SYSTEM_ACCOUNTS.PROCESSING_EXPENSE,

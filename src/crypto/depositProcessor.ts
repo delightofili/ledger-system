@@ -1,11 +1,8 @@
 import { prisma } from "../lib/prisma";
 import { postTransaction } from "../services/ledger";
 import { listenForUSDCDeposits, DepositEvent } from "./eventListener";
-import { deriveUserAddress } from "./wallet";
-import { toSmallestUnit } from "../lib/money";
 
 export async function loadWatchedAddresses(): Promise<Map<string, string>> {
-  // Map<ethereumAddress, userId>
   const users = await prisma.cryptoDepositAddress.findMany({
     select: { address: true, userId: true },
   });
@@ -17,7 +14,6 @@ export async function loadWatchedAddresses(): Promise<Map<string, string>> {
 }
 
 export async function processUSDCDeposit(event: DepositEvent, userId: string) {
-  // to check if already processed — tx hash is unique on blockchain
   const existing = await prisma.cryptoTransaction.findUnique({
     where: { txHash: event.txHash },
   });
@@ -25,8 +21,6 @@ export async function processUSDCDeposit(event: DepositEvent, userId: string) {
   if (existing) {
     console.log(`Already processed tx: ${event.txHash}`);
     return existing;
-    // idempotency — blockchain events can be received multiple times so we use the IDK
-    // if websocket reconnects, I might get old events again
   }
 
   // find user's USDC ledger account
