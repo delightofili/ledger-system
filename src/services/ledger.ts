@@ -1,6 +1,13 @@
 import { prisma } from "../lib/prisma";
 import { Prisma } from "../../generated/prisma";
 import crypto from "crypto";
+import { publishEvent, TOPICS } from "../lib/kafka";
+import {
+  checkIdempotency,
+  setIdempotencyProcessing,
+  setIdempotencyComplete,
+  setIdempotencyFailed,
+} from "../lib/idempotency";
 
 type Direction = "DEBIT" | "CREDIT";
 type TransactionStatus = "PENDING" | "POSTED" | "VOIDED";
@@ -18,76 +25,96 @@ interface PostTransactionInput {
 }
 
 export async function postTransaction(input: PostTransactionInput) {
-  // firstly, validate balance before touching the database
   validateBalance(input.entries);
 
-  return prisma.$transaction(
-    async (tx: any) => {
-      // check idempotency
-      const existing = await tx.idempotencyKey.findUnique({
-        where: { key: input.idempotencyKey },
-      });
+  const cached = await checkIdempotency(input.idempotencyKey);
 
-      if (existing?.status === "COMPLETE" && existing.response) {
-        return existing.response;
-      }
+  if (cached.exists) {
+    if (cached.status === "complete") {
+      return cached.response;
+      // return stored result immediately — sub-millisecond
+    }
+    if (cached.status === "processing") {
+      throw new Error("Transaction still processing — retry in a moment");
+    }
+    if (cached.status === "failed") {
+      throw new Error(
+        "Transaction previously failed — use a new idempotency key",
+      );
+    }
+  }
 
-      if (existing?.status === "PROCESSING") {
-        throw new Error("Transaction still processing — retry later");
-      }
+  // CLAIM THE KEY — atomic SET NX
+  const claimed = await setIdempotencyProcessing(input.idempotencyKey);
+  if (!claimed) {
+    throw new Error(
+      "Concurrent request with same idempotency key — retry shortly",
+    );
+  }
 
-      await tx.idempotencyKey.upsert({
-        where: { key: input.idempotencyKey },
-        create: {
-          key: input.idempotencyKey,
-          requestHash: hashRequest(input),
-          status: "PROCESSING",
-        },
-        update: { status: "PROCESSING" },
-      });
+  try {
+    const transaction = await prisma.$transaction(
+      async (tx) => {
+        const accountIds = input.entries.map((e) => e.accountId);
+        await tx.$executeRaw`
+        SELECT id FROM accounts
+        WHERE id = ANY(${accountIds}::uuid[])
+        FOR UPDATE
+      `;
 
-      const accountIds = input.entries.map((e) => e.accountId);
-      await tx.$executeRaw`
-      SELECT id FROM accounts
-      WHERE id = ANY(${accountIds}::uuid[])
-      FOR UPDATE
-    `;
-
-      // create transaction with entriesss
-      const transaction = await tx.transaction.create({
-        data: {
-          idempotencyKey: input.idempotencyKey,
-          description: input.description,
-          metadata: input.metadata,
-          entries: {
-            create: input.entries.map((e) => ({
-              accountId: e.accountId,
-              direction: e.direction,
-              amount: e.amount,
-              currency: e.currency,
-            })),
+        return tx.transaction.create({
+          data: {
+            idempotencyKey: input.idempotencyKey,
+            description: input.description,
+            metadata: input.metadata as Prisma.InputJsonObject | undefined,
+            entries: {
+              create: input.entries.map((e) => ({
+                accountId: e.accountId,
+                direction: e.direction,
+                amount: e.amount,
+                currency: e.currency,
+              })),
+            },
           },
-        },
-        include: {
-          entries: {
-            include: { account: true },
+          include: {
+            entries: { include: { account: true } },
           },
-        },
-      });
+        });
+      },
+      { isolationLevel: "Serializable" },
+    );
 
-      // mark idempotency key as complete
-      await tx.idempotencyKey.update({
-        where: { key: input.idempotencyKey },
-        data: {
-          status: "COMPLETE",
-          response: transaction as unknown as Record<string, unknown>,
-        },
-      });
+    await setIdempotencyComplete(input.idempotencyKey, transaction);
 
-      return transaction;
-    },
-    { isolationLevel: "Serializable" },
-  );
+    // PUBLISH TO KAFKA
+    // fire and forget — don't await in the critical path
+    // if Kafka is down, the transaction still succeeds
+    publishEvent(
+      TOPICS.TRANSACTION_POSTED,
+      {
+        transactionId: transaction.id,
+        description: transaction.description,
+        entryCount: transaction.entries.length,
+        totalDebits: transaction.entries
+          .filter((e) => e.direction === "DEBIT")
+          .reduce((sum, e) => sum + Number(e.amount), 0),
+        currency: transaction.entries[0]?.currency,
+        metadata: transaction.metadata,
+      },
+      transaction.id,
+    ).catch((err) => {
+      // log but don't fail the transaction
+      console.error("Failed to publish transaction event:", err);
+    });
+
+    return transaction;
+  } catch (error) {
+    await setIdempotencyFailed(
+      input.idempotencyKey,
+      error instanceof Error ? error.message : "Unknown error",
+    );
+    throw error;
+  }
 }
 
 export async function getBalance(
