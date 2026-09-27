@@ -7,31 +7,65 @@ import accountsRouter from "./routes/accounts";
 import transactionsRouter from "./routes/transactions";
 import paymentsRouter from "./routes/payments";
 import webhooksRouter from "./routes/webhooks";
+import usersRouter from "./routes/users";
+import adminRouter from "./routes/admin";
 import { seedSystemAccounts } from "./seeds/accounts";
+import { startReconciliationJobs } from "./jobs/reconcilation";
+import { rateLimit } from "./middleware/rateLimit";
 
 const app = express();
 
 app.use(helmet());
 app.use(cors());
 
-// CRITICAL — webhook routes must use raw body parser
-// if you use express.json() on webhook routes
-// the body gets parsed as an object
-// signature verification requires the raw bytes
-// the order here matters — raw parser registered BEFORE json parser
+// raw body for webhooks — must be before express.json()
 app.use("/webhooks/paystack", express.raw({ type: "application/json" }));
 app.use("/webhooks/stripe", express.raw({ type: "application/json" }));
 
-// all other routes use JSON parser
 app.use(express.json());
 
+// rate limiting per route group
+app.use(
+  "/transactions",
+  rateLimit({
+    windowSeconds: 60,
+    maxRequests: 100,
+    keyPrefix: "transactions",
+  }),
+);
+
+app.use(
+  "/payments",
+  rateLimit({
+    windowSeconds: 60,
+    maxRequests: 30,
+    keyPrefix: "payments",
+  }),
+);
+
+// routes
 app.use("/accounts", accountsRouter);
 app.use("/transactions", transactionsRouter);
 app.use("/payments", paymentsRouter);
 app.use("/webhooks", webhooksRouter);
+app.use("/users", usersRouter);
+app.use("/admin", adminRouter);
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date() });
+app.get("/health", async (req, res) => {
+  const { redis } = await import("./lib/redis");
+  const redisOk = await redis
+    .ping()
+    .then(() => true)
+    .catch(() => false);
+
+  res.json({
+    status: "ok",
+    timestamp: new Date(),
+    services: {
+      database: "ok",
+      redis: redisOk ? "ok" : "error",
+    },
+  });
 });
 
 app.use(
@@ -50,5 +84,6 @@ const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, async () => {
   await seedSystemAccounts();
-  console.log(`Ledger engine running on port ${PORT}`);
+  startReconciliationJobs();
+  console.log(`Nexus Ledger running on port ${PORT}`);
 });
