@@ -208,3 +208,18 @@ model ReconciliationAlert {
 
   @@map("reconciliation_alerts")
 }
+
+model FxRate {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fromCurrency String
+  toCurrency   String
+  rate         Decimal  @db.Decimal(20, 10)
+
+  source       String   @default("manual")
+
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([fromCurrency, toCurrency, active])
+  @@map("fx_rates")
+}
