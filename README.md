@@ -279,15 +279,9 @@ with reconciliation check
 
 - **Database**: [PostgreSQL](https://www.postgresql.org/?utm_source=gemini)
 
-## What's next (Phase 4)
-
-- Formance Ledger integration for programmable fee-splitting
-- Numscript for complex payout routing
-- Kafka event streaming for transaction events
-- Redis for idempotency key caching and rate limiting
-- Multi-currency FX with spread tracking
-- Full Nexus Ledger capstone
-
 ---
+
+> This is a backend API project. No frontend — run locally with the
+> setup instructions above or browse the code directly.
 
 Built by Chukwunonso Ofili — [@DelightOfili](https://twitter.com/DelightOfili)
